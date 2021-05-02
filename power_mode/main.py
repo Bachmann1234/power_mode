@@ -36,10 +36,12 @@ class Controller:
 
 
 def main():
-    arduinos = list(list_ports.grep('Arduino Uno'))
+    arduinos = list(list_ports.grep("Arduino Uno"))
 
     if len(arduinos) > 1:
-        print(f"Multiple arduinos found. Going with the first {arduinos[0].description} {arduinos[0].serial_number}")
+        print(
+            f"Multiple arduinos found. Going with the first {arduinos[0].description} {arduinos[0].serial_number}"
+        )
     elif not arduinos:
         print("No arduino found!")
     else:
