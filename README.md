@@ -7,9 +7,12 @@ https://marketplace.visualstudio.com/items?itemName=hoovercj.vscode-power-mode'
 
 # The game
 
-Essentially I track keystrokes and record 'combo' and 'wpm'.
+Each stroke adds to your combo after 10 seconds of inactivity the combo resets to 0.
 
-If you don't type within 10 seconds the combo rest
+The display will alternate between your current combo and your median WPM
+
+The game also tracks your max combo and will display it and your most recent median WPM after 
+the combo resets.
 
 # High level architecture
 
