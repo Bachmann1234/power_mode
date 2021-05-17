@@ -60,41 +60,62 @@ class GameState:
             else 0
         )
 
-    def copy(self) -> GameState:
+    def copy(
+        self,
+        current_combo: Optional[int] = None,
+        max_combo: Optional[int] = None,
+        combo_timeout: Optional[int] = None,
+        time_of_last_key: Optional[float] = None,
+        combo_start: Optional[float] = None,
+        recorded_wpms: Optional[List[int]] = None,
+        num_backspaces: Optional[int] = None,
+    ) -> GameState:
         return GameState(
-            current_combo=self.current_combo,
-            max_combo=self.max_combo,
-            combo_timeout=self.combo_timeout,
-            time_of_last_key=self.time_of_last_key,
-            combo_start=self.combo_start,
-            recorded_wpms=self.recorded_wpms,
-            num_backspaces=self.num_backspaces,
+            current_combo=self.current_combo
+            if current_combo is None
+            else current_combo,
+            max_combo=self.max_combo if max_combo is None else max_combo,
+            combo_timeout=self.combo_timeout
+            if combo_timeout is None
+            else combo_timeout,
+            time_of_last_key=self.time_of_last_key
+            if time_of_last_key is None
+            else time_of_last_key,
+            combo_start=self.combo_start if combo_start is None else combo_start,
+            recorded_wpms=self.recorded_wpms
+            if recorded_wpms is None
+            else recorded_wpms,
+            num_backspaces=self.num_backspaces
+            if num_backspaces is None
+            else num_backspaces,
         )
 
     def increment_combo(self, key) -> GameState:
-        self.current_combo += 1
-        self.time_of_last_key = time()
-        if key == Key.backspace:
-            self.num_backspaces += 1
-        if self.current_combo == 1:
-            self.recorded_wpms = []
-        return self.copy()
+        return self.copy(
+            current_combo=self.current_combo + 1,
+            num_backspaces=self.num_backspaces + 1 if key == Key.backspace else None,
+            time_of_last_key=time(),
+            recorded_wpms=[] if self.current_combo == 1 else None,
+        )
 
     def combo_stopped(self) -> GameState:
-        if self.current_combo > self.max_combo:
-            self.max_combo = self.current_combo
-        self.current_combo = 0
-        self.num_backspaces = 0
-        self.combo_start = time()
-        return self.copy()
+        return self.copy(
+            current_combo=0,
+            num_backspaces=0,
+            combo_start=time(),
+            max_combo=self.current_combo
+            if self.current_combo > self.max_combo
+            else None,
+        )
 
     def record_wpm(self) -> GameState:
         current_wpm = self.current_wpm
+        recorded_wpms = None
         if current_wpm:
-            self.recorded_wpms.append(current_wpm)
-            if len(self.recorded_wpms) > 100:
-                self.recorded_wpms = self.recorded_wpms[1:]
-        return self.copy()
+            recorded_wpms = self.recorded_wpms + [current_wpm]
+            if len(recorded_wpms) > 100:
+                recorded_wpms = recorded_wpms[1:]
+        return self.copy(recorded_wpms=recorded_wpms)
 
 
 class Controller(ABC):
@@ -143,11 +164,9 @@ class ScreenController(SerialOutputController):
             c,.5,1039;
         """
         if state.current_combo:
-            mode = "c" if self.display_combo else "w"
+            mode = "c" if self.display_combo or not state.median_wpm else "w"
             value_to_display = (
-                str(state.current_combo)
-                if self.display_combo
-                else str(state.median_wpm)
+                str(state.current_combo) if mode == "c" else str(state.median_wpm)
             )
         else:
             mode = "e"
@@ -219,11 +238,12 @@ def _get_controller(
 
 class GameManager:
     def __init__(
-        self,
-        serial_controllers: List[SerialOutputController],
+        self, serial_controllers: List[SerialOutputController], tick_thread: bool = True
     ):
         self.game_state = GameState.start()
         self.serial_controllers: List[SerialOutputController] = serial_controllers
+        self.tick_thread = tick_thread
+        self.trigger_tick()
 
     def trigger_tick(self) -> None:
         if self.game_state.percent_time_left == 0:
@@ -232,7 +252,8 @@ class GameManager:
         snapshot = self.game_state.copy()
         for controller in self.serial_controllers:
             controller.tick(snapshot)
-        threading.Timer(0.05, self.trigger_tick).start()
+        if self.tick_thread:
+            threading.Timer(0.05, self.trigger_tick).start()
 
     def key_down(self, key) -> None:
         self.game_state = self.game_state.increment_combo(key).record_wpm()
@@ -253,8 +274,6 @@ def main():
             if controller
         ],
     )
-    # Begin the loop. Trigger tick will trigger itself going forward
-    game_manager.trigger_tick()
     print("Starting listener")
     with keyboard.Listener(on_press=game_manager.key_down) as listener:
         listener.join()
