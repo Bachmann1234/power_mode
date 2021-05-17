@@ -13,21 +13,51 @@ from serial.tools import list_ports  # type: ignore
 @dataclass
 class GameState:
     combo_count: int
+    max_combo: int
     combo_timeout: int
     time_of_last_key: float
     combo_start: float
 
+    @property
     def percent_time_left(self) -> float:
         seconds_past = time() - self.time_of_last_key
         time_left = (self.combo_timeout - seconds_past) / self.combo_timeout
         return time_left if time_left >= 0 else 0
 
+    @property
+    def wpm(self) -> int:
+        return 0
+
     def copy(self) -> GameState:
         return GameState(
             combo_count=self.combo_count,
+            max_combo=self.max_combo,
             combo_timeout=self.combo_timeout,
             time_of_last_key=self.time_of_last_key,
             combo_start=self.combo_start,
+        )
+
+    def increment_combo(self) -> GameState:
+        return GameState(
+            combo_count=self.combo_count + 1,
+            max_combo=self.max_combo,
+            combo_timeout=self.combo_timeout,
+            time_of_last_key=time(),
+            combo_start=self.combo_start,
+        )
+
+    def combo_stopped(self) -> GameState:
+        if self.combo_count > self.max_combo:
+            max_combo = self.combo_count
+            print(f"New Record: {max_combo}")
+        else:
+            max_combo = self.max_combo
+        return GameState(
+            combo_count=0,
+            max_combo=max_combo,
+            combo_timeout=self.combo_timeout,
+            time_of_last_key=self.time_of_last_key,
+            combo_start=time(),
         )
 
 
@@ -37,31 +67,6 @@ class Controller(ABC):
 
     def key_down(self, key, state: GameState) -> None:
         raise NotImplementedError()
-
-
-class GameStateController(Controller):
-    def __init__(self):
-        self.game_state = GameState(0, 10, time(), time())
-
-    def tick(self, state: GameState) -> None:
-        if self.game_state.percent_time_left() == 0:
-            self.game_state = GameState(
-                combo_count=0,
-                combo_timeout=self.game_state.combo_timeout,
-                time_of_last_key=time(),
-                combo_start=time(),
-            )
-
-    def key_down(self, key, state: GameState) -> None:
-        self.game_state = GameState(
-            combo_count=self.game_state.combo_count + 1,
-            combo_timeout=self.game_state.combo_timeout,
-            time_of_last_key=time(),
-            combo_start=self.game_state.combo_start,
-        )
-
-    def get_game_state(self) -> GameState:
-        return self.game_state.copy()
 
 
 class SerialOutputController(Controller, ABC):
@@ -78,7 +83,7 @@ class ScreenController(SerialOutputController):
         pass
 
     def tick(self, state: GameState) -> None:
-        time_left = state.percent_time_left()
+        time_left = state.percent_time_left
         msg = f"{time_left},{state.combo_count};".encode("utf-8")
         cur_time = time()
         if cur_time - self.last_write > 0.1:
@@ -140,32 +145,35 @@ def _get_controller(
 class GameManager:
     def __init__(
         self,
-        game_state_controller: GameStateController,
         serial_controllers: List[SerialOutputController],
     ):
-        self.game_state_controller = game_state_controller
+        self.game_state = GameState(
+            combo_count=0,
+            max_combo=0,
+            combo_timeout=10,
+            time_of_last_key=time(),
+            combo_start=time(),
+        )
         self.serial_controllers = serial_controllers
 
     def trigger_tick(self) -> None:
-        self.game_state_controller.tick(self.game_state_controller.get_game_state())
-        game_state_snapshot = self.game_state_controller.get_game_state()
+        if self.game_state.percent_time_left == 0:
+            self.game_state = self.game_state.combo_stopped()
+        snapshot = self.game_state.copy()
         for controller in self.serial_controllers:
-            controller.tick(game_state_snapshot)
+            controller.tick(snapshot)
         threading.Timer(0.05, self.trigger_tick).start()
 
     def key_down(self, key) -> None:
-        self.game_state_controller.key_down(
-            key, self.game_state_controller.get_game_state()
-        )
-        game_state_snapshot = self.game_state_controller.get_game_state()
+        self.game_state = self.game_state.increment_combo()
+        snapshot = self.game_state.copy()
         for controller in self.serial_controllers:
-            controller.key_down(key, game_state_snapshot)
+            controller.key_down(key, snapshot)
 
 
 def main():
     print("Starting game")
     game_manager = GameManager(
-        game_state_controller=GameStateController(),
         serial_controllers=[
             controller
             for controller in [
@@ -175,6 +183,7 @@ def main():
             if controller
         ],
     )
+    # Begin the loop. Trigger tick will trigger itself going forward
     game_manager.trigger_tick()
     print("Starting listener")
     with keyboard.Listener(on_press=game_manager.key_down) as listener:
