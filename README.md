@@ -1,8 +1,17 @@
 # Hardware Powermode
 
 This repository contains the code required to run a hardware 
-implementation of editors 'POWER MODE'
+implementation of editor extensions like 'POWER MODE'
 
+https://marketplace.visualstudio.com/items?itemName=hoovercj.vscode-power-mode'
+
+# The game
+
+Essentially I track keystrokes and record 'combo' and 'wpm'.
+
+If you don't type within 10 seconds the combo rest
+
+# High level architecture
 
 When the program starts up it looks for a number of arduinos and hooks them
 up as controller. It then sets up two 'events': Key down, and tick.
