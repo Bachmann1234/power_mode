@@ -1,106 +1,127 @@
+from __future__ import annotations
 import threading
 from abc import ABC
+from dataclasses import dataclass
 from time import time
-from typing import Optional, Type
+from typing import Optional, Type, List
 
-from pynput import keyboard
-import serial
-from serial.tools import list_ports
+from pynput import keyboard  # type: ignore
+import serial  # type: ignore
+from serial.tools import list_ports  # type: ignore
+
+
+@dataclass
+class GameState:
+    combo_count: int
+    combo_timeout: int
+    time_of_last_key: float
+    combo_start: float
+
+    def percent_time_left(self) -> float:
+        seconds_past = time() - self.time_of_last_key
+        time_left = (self.combo_timeout - seconds_past) / self.combo_timeout
+        return time_left if time_left >= 0 else 0
+
+    def copy(self) -> GameState:
+        return GameState(
+            combo_count=self.combo_count,
+            combo_timeout=self.combo_timeout,
+            time_of_last_key=self.time_of_last_key,
+            combo_start=self.combo_start,
+        )
 
 
 class Controller(ABC):
-    def start(self) -> None:
+    def tick(self, state: GameState) -> None:
         raise NotImplementedError()
 
-    def key_down(self, key) -> None:
+    def key_down(self, key, state: GameState) -> None:
         raise NotImplementedError()
 
 
-class SerialController(Controller, ABC):
+class GameStateController(Controller):
+    def __init__(self):
+        self.game_state = GameState(0, 10, time(), time())
+
+    def tick(self, state: GameState) -> None:
+        if self.game_state.percent_time_left() == 0:
+            self.game_state = GameState(
+                combo_count=0,
+                combo_timeout=self.game_state.combo_timeout,
+                time_of_last_key=time(),
+                combo_start=time(),
+            )
+
+    def key_down(self, key, state: GameState) -> None:
+        self.game_state = GameState(
+            combo_count=self.game_state.combo_count + 1,
+            combo_timeout=self.game_state.combo_timeout,
+            time_of_last_key=time(),
+            combo_start=self.game_state.combo_start,
+        )
+
+    def get_game_state(self) -> GameState:
+        return self.game_state.copy()
+
+
+class SerialOutputController(Controller, ABC):
     def __init__(self, serial_connection):
         self.serial_connection = serial_connection
 
 
-class MetaController(Controller):
-    def __init__(self, controllers):
-        self.controllers = controllers
-
-    def start(self) -> None:
-        for controller in self.controllers:
-            controller.start()
-
-    def key_down(self, key) -> None:
-        for controller in self.controllers:
-            controller.key_down(key)
-
-
-class ScreenController(SerialController):
+class ScreenController(SerialOutputController):
     def __init__(self, serial_connection):
         super().__init__(serial_connection)
-        self.combo = 0
-        self.combo_timeout = 10
-        self.time_at_last_key = time()
+        self.last_write = time()
 
-    def key_down(self, key) -> None:
-        self.combo += 1
-        self.time_at_last_key = time()
+    def key_down(self, _, state: GameState) -> None:
+        pass
 
-    def start(self) -> None:
-        self._send_state()
-
-    def _send_state(self) -> None:
-        threading.Timer(0.1, self._send_state).start()
-        self._send()
-
-    def _send(self) -> None:
-        time_left = self._get_percent_time_left()
-        if not time_left:
-            self.combo = 0
-        msg = f"{time_left},{self.combo};".encode("utf-8")
-        self.serial_connection.write(msg)
-
-    def _get_percent_time_left(self) -> float:
-        seconds_past = time() - self.time_at_last_key
-        time_left = (self.combo_timeout - seconds_past) / self.combo_timeout
-        return time_left if time_left >= 0 else 0
+    def tick(self, state: GameState) -> None:
+        time_left = state.percent_time_left()
+        msg = f"{time_left},{state.combo_count};".encode("utf-8")
+        cur_time = time()
+        if cur_time - self.last_write > 0.1:
+            self.serial_connection.write(msg)
+            self.last_write = cur_time
 
 
-class BellController(SerialController):
+class BellController(SerialOutputController):
     def __init__(self, serial_connection):
         super().__init__(serial_connection)
-        self.bells = [False, False, False, False]
+        self.bell_click_times = [1.0, 1.0, 1.0, 1.0]
+        self.last_message = None
         self.current_index = 0
 
-    def start(self) -> None:
-        self._send_state()
-
-    def key_down(self, key) -> None:
-        self._enable_bell(self.current_index)
-        threading.Timer(0.2, self._disable_bell, args=[self.current_index]).start()
+    def key_down(self, key, state: GameState) -> None:
+        self.bell_click_times[self.current_index] = time()
         self._increment_index()
+        self._send()
 
-    def _disable_bell(self, index):
-        self.bells[index] = False
-        self._send_state()
-
-    def _enable_bell(self, index):
-        self.bells[index] = True
-        self._send_state()
+    def tick(self, _: GameState):
+        self._send()
 
     def _increment_index(self):
         self.current_index += 1
-        if self.current_index == len(self.bells):
+        if self.current_index == len(self.bell_click_times):
             self.current_index = 0
 
-    def _send_state(self):
-        self.serial_connection.write(
-            "".join(["1" if bell else "0" for bell in self.bells]).encode("utf-8")
+    def _send(self):
+        curr_time = time()
+        msg = "".join(
+            [
+                "1" if curr_time - bell_clicked_time < 0.1 else "0"
+                for bell_clicked_time in self.bell_click_times
+            ]
         )
+        if msg != self.last_message:
+            self.last_message = msg
+            self.serial_connection.write(msg.encode("utf-8"))
 
 
 def _get_controller(
-    identifier: str, controller: Type[SerialController]
-) -> Optional[SerialController]:
+    identifier: str, controller: Type[SerialOutputController]
+) -> Optional[SerialOutputController]:
     controllers = list(list_ports.grep(identifier))
     if len(controllers) > 1:
         print(
@@ -116,21 +137,47 @@ def _get_controller(
     return microcontroller
 
 
+class GameManager:
+    def __init__(
+        self,
+        game_state_controller: GameStateController,
+        serial_controllers: List[SerialOutputController],
+    ):
+        self.game_state_controller = game_state_controller
+        self.serial_controllers = serial_controllers
+
+    def trigger_tick(self) -> None:
+        self.game_state_controller.tick(self.game_state_controller.get_game_state())
+        game_state_snapshot = self.game_state_controller.get_game_state()
+        for controller in self.serial_controllers:
+            controller.tick(game_state_snapshot)
+        threading.Timer(0.05, self.trigger_tick).start()
+
+    def key_down(self, key) -> None:
+        self.game_state_controller.key_down(
+            key, self.game_state_controller.get_game_state()
+        )
+        game_state_snapshot = self.game_state_controller.get_game_state()
+        for controller in self.serial_controllers:
+            controller.key_down(key, game_state_snapshot)
+
+
 def main():
     print("Starting game")
-    controller = MetaController(
-        [
+    game_manager = GameManager(
+        game_state_controller=GameStateController(),
+        serial_controllers=[
             controller
             for controller in [
                 _get_controller("Adafruit Metro", ScreenController),
                 _get_controller("Arduino Uno", BellController),
             ]
             if controller
-        ]
+        ],
     )
-    controller.start()
+    game_manager.trigger_tick()
     print("Starting listener")
-    with keyboard.Listener(on_press=controller.key_down) as listener:
+    with keyboard.Listener(on_press=game_manager.key_down) as listener:
         listener.join()
 
 

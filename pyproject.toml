@@ -10,6 +10,7 @@ pytest = "^6.2.3"
 black = "^21.4b2"
 pynput = "^1.7.3"
 pyserial = "^3.5"
+mypy = "^0.812"
 
 [tool.poetry.dev-dependencies]
 
