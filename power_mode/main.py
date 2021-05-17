@@ -133,6 +133,15 @@ class ScreenController(SerialOutputController):
             self.last_mode_change = cur_time
 
     def write_state(self, state: GameState, cur_time: float) -> None:
+        """
+        Protocol is mode,timeleft,value;
+        mode: (one of: c,w,e)
+        timeleft: float
+        value: some string, should not be longer than 8 chars or so....
+
+        Example:
+            c,.5,1039;
+        """
         if state.current_combo:
             mode = "c" if self.display_combo else "w"
             value_to_display = (
@@ -143,7 +152,8 @@ class ScreenController(SerialOutputController):
         else:
             mode = "e"
             value_to_display = f"{state.max_combo} {state.median_wpm}"
-        msg = f"{mode},{state.percent_time_left},{value_to_display};"
+        truncated_percent_left = "{:.2f}".format(state.percent_time_left)
+        msg = f"{mode},{truncated_percent_left},{value_to_display};"
         if msg != self.last_message:
             self.serial_connection.write(msg.encode("utf-8"))
             self.last_message = msg
@@ -171,6 +181,12 @@ class BellController(SerialOutputController):
             self.current_index = 0
 
     def _send(self):
+        """
+        protocol is just on or off for each of the bell relays
+        example: 1010
+
+        Any bell that was triggered over .1 seconds ago is flipped to 0
+        """
         curr_time = time()
         msg = "".join(
             [
