@@ -199,7 +199,7 @@ class ScreenController(SerialOutputController):
             )
         else:
             mode = "e"
-            value_to_display = f"{state.max_combo} {state.max_median_wpm}"
+            value_to_display = f"{state.max_combo}  {state.max_median_wpm}"
         truncated_percent_left = "{:.1f}".format(state.percent_time_left)
         msg = f"{mode},{truncated_percent_left},{value_to_display};"
         if msg != self.last_message:

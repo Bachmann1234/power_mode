@@ -22,7 +22,7 @@ def test_tick():
         game_state = GameState.start()
         controller = ScreenController(mock_serial)
         controller.tick(game_state)
-        assert mock_serial.write.call_args_list == [call(b"e,0.0,0 0;")]
+        assert mock_serial.write.call_args_list == [call(b"e,0.0,0  0;")]
         mock_serial.reset_mock()
 
         # Basic tick
@@ -50,7 +50,7 @@ def test_mode_change():
         game_state = GameState.start()
         controller = ScreenController(mock_serial)
         controller.tick(game_state)
-        assert mock_serial.write.call_args_list == [call(b"e,0.0,0 0;")]
+        assert mock_serial.write.call_args_list == [call(b"e,0.0,0  0;")]
         mock_serial.reset_mock()
         frozen_time.tick(delta=timedelta(seconds=0.5))
         game_state = game_state.copy(
@@ -75,7 +75,7 @@ def test_count_down():
         game_state = GameState.start()
         controller = ScreenController(mock_serial)
         controller.tick(game_state)
-        assert mock_serial.write.call_args_list == [call(b"e,0.0,0 0;")]
+        assert mock_serial.write.call_args_list == [call(b"e,0.0,0  0;")]
         mock_serial.reset_mock()
         frozen_time.tick(delta=timedelta(seconds=1))
         game_state = game_state.copy(
@@ -102,5 +102,5 @@ def test_count_down():
 
         frozen_time.tick(delta=timedelta(seconds=3))
         controller.tick(game_state.combo_stopped())
-        assert mock_serial.write.call_args_list == [call(b"e,0.0,1000 80;")]
+        assert mock_serial.write.call_args_list == [call(b"e,0.0,1000  80;")]
         mock_serial.reset_mock()

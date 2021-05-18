@@ -20,7 +20,7 @@ boolean newData;
 
 char* wpm = "WPM";
 char* combo = "COMBO";
-char* stopped = "MAXC WPM";
+char* stopped = "MAXC MAXW";
 
 void resetState() {
   newData = false;
