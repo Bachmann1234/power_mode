@@ -29,4 +29,6 @@ jobs:
       - name: Run The lints and tests
         run: |
           bash ${{ github.workspace }}/check.sh
+        env:
+          PYNPUT_BACKEND: dummy
       - run: echo "🍏 This job's status is ${{ job.status }}."
