@@ -9,8 +9,9 @@ from time import time
 from typing import Optional, Type, List, TypeVar
 
 from pynput import keyboard  # type: ignore
+from pynput.keyboard import Key, KeyCode  # type: ignore
 import serial  # type: ignore
-from pynput.keyboard import Key, KeyCode
+from serial import Serial
 from serial.tools import list_ports  # type: ignore
 
 T = TypeVar("T")
@@ -155,12 +156,12 @@ class Controller(ABC):
 
 
 class SerialOutputController(Controller, ABC):
-    def __init__(self, serial_connection):
+    def __init__(self, serial_connection: Serial):
         self.serial_connection = serial_connection
 
 
 class ScreenController(SerialOutputController):
-    def __init__(self, serial_connection):
+    def __init__(self, serial_connection: Serial):
         super().__init__(serial_connection)
         self.last_write = time()
         self.last_mode_change = time()
@@ -208,7 +209,7 @@ class ScreenController(SerialOutputController):
 
 
 class BellController(SerialOutputController):
-    def __init__(self, serial_connection):
+    def __init__(self, serial_connection: Serial):
         super().__init__(serial_connection)
         self.bell_click_times = [1.0, 1.0, 1.0, 1.0]
         self.last_message = None
