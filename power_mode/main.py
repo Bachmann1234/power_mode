@@ -248,12 +248,9 @@ class BellController(SerialOutputController):
 
 
 class GameManager:
-    def __init__(
-        self, serial_controllers: List[SerialOutputController], tick_thread: bool = True
-    ):
+    def __init__(self, serial_controllers: List[SerialOutputController]):
         self.game_state = GameState.start()
         self.serial_controllers: List[SerialOutputController] = serial_controllers
-        self.tick_thread = tick_thread
         self.trigger_tick()
 
     def trigger_tick(self) -> None:
@@ -263,10 +260,8 @@ class GameManager:
         snapshot = self.game_state.copy()
         for controller in self.serial_controllers:
             controller.tick(snapshot)
-        if self.tick_thread:
-            threading.Timer(0.05, self.trigger_tick).start()
 
-    def key_down(self, key) -> None:
+    def trigger_key_down(self, key) -> None:
         self.game_state = self.game_state.increment_combo(key).record_wpm()
         snapshot = self.game_state.copy()
         for controller in self.serial_controllers:
@@ -291,7 +286,12 @@ def _get_controller(
     return microcontroller
 
 
-def main():
+def _game_tick(manager: GameManager):
+    manager.trigger_tick()
+    threading.Timer(0.05, _game_tick, args=[manager]).start()
+
+
+def _main():
     print("Starting game")
     game_manager = GameManager(
         serial_controllers=[
@@ -304,9 +304,10 @@ def main():
         ],
     )
     print("Starting listener")
-    with keyboard.Listener(on_press=game_manager.key_down) as listener:
+    _game_tick(game_manager)
+    with keyboard.Listener(on_press=game_manager.trigger_key_down) as listener:
         listener.join()
 
 
 if __name__ == "__main__":
-    main()
+    _main()

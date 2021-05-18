@@ -26,7 +26,7 @@ def test_bell_controller():
             call(b"1100"),
             call(b"1110"),
             call(b"0111"),  # First bell times out
-            call(b"1011"),  # second bell times out
+            call(b"1011"),  # second bell times out but typing enabled bell 1
         ]
 
 
