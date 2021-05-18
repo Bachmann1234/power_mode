@@ -1,5 +1,4 @@
 from datetime import timedelta
-from time import time
 from unittest.mock import Mock, call
 
 import freezegun
