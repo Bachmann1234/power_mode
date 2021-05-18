@@ -6,18 +6,26 @@ import threading
 from abc import ABC
 from dataclasses import dataclass
 from time import time
-from typing import Optional, Type, List
+from typing import Optional, Type, List, TypeVar
 
 from pynput import keyboard  # type: ignore
 import serial  # type: ignore
-from pynput.keyboard import Key
+from pynput.keyboard import Key, KeyCode
 from serial.tools import list_ports  # type: ignore
+
+T = TypeVar("T")
 
 
 @dataclass
 class GameState:
+    CHARS_IN_WORD = 5
+    MIN_WORDS_FOR_WPM = 5
+
     current_combo: int
     max_combo: int
+    max_median_wpm: int
+    combo_at_last_timeout: int
+    median_wpm_at_last_timeout: int
     combo_timeout: int
     time_of_last_key: float
     combo_start: float
@@ -29,8 +37,11 @@ class GameState:
         return GameState(
             current_combo=0,
             max_combo=0,
+            max_median_wpm=0,
+            combo_at_last_timeout=0,
+            median_wpm_at_last_timeout=0,
             combo_timeout=10,
-            time_of_last_key=time() - 10,
+            time_of_last_key=time() - 10,  # want to start 'timed out'
             combo_start=time(),
             recorded_wpms=[],
             num_backspaces=0,
@@ -46,8 +57,8 @@ class GameState:
     def current_wpm(self) -> int:
         words_typed = (
             self.current_combo - self.num_backspaces
-        ) / 5  # WPM defines a word as 5 chars
-        if words_typed < 5:
+        ) / GameState.CHARS_IN_WORD
+        if words_typed < GameState.MIN_WORDS_FOR_WPM:
             return 0
         minutes_passed = (time() - self.combo_start) / 60
         return math.floor(words_typed / minutes_passed)
@@ -60,10 +71,17 @@ class GameState:
             else 0
         )
 
+    @staticmethod
+    def _new_if_exists(new: Optional[T], original: T) -> T:
+        return original if new is None else new
+
     def copy(
         self,
         current_combo: Optional[int] = None,
         max_combo: Optional[int] = None,
+        max_median_wpm: Optional[int] = None,
+        combo_at_last_timeout: Optional[int] = None,
+        median_wpm_at_last_timeout: Optional[int] = None,
         combo_timeout: Optional[int] = None,
         time_of_last_key: Optional[float] = None,
         combo_start: Optional[float] = None,
@@ -71,31 +89,32 @@ class GameState:
         num_backspaces: Optional[int] = None,
     ) -> GameState:
         return GameState(
-            current_combo=self.current_combo
-            if current_combo is None
-            else current_combo,
-            max_combo=self.max_combo if max_combo is None else max_combo,
-            combo_timeout=self.combo_timeout
-            if combo_timeout is None
-            else combo_timeout,
-            time_of_last_key=self.time_of_last_key
-            if time_of_last_key is None
-            else time_of_last_key,
-            combo_start=self.combo_start if combo_start is None else combo_start,
-            recorded_wpms=self.recorded_wpms
-            if recorded_wpms is None
-            else recorded_wpms,
-            num_backspaces=self.num_backspaces
-            if num_backspaces is None
-            else num_backspaces,
+            current_combo=self._new_if_exists(current_combo, self.current_combo),
+            max_combo=self._new_if_exists(max_combo, self.max_combo),
+            max_median_wpm=self._new_if_exists(max_median_wpm, self.max_median_wpm),
+            combo_at_last_timeout=self._new_if_exists(
+                combo_at_last_timeout, self.combo_at_last_timeout
+            ),
+            median_wpm_at_last_timeout=self._new_if_exists(
+                median_wpm_at_last_timeout, self.median_wpm_at_last_timeout
+            ),
+            combo_timeout=self._new_if_exists(combo_timeout, self.combo_timeout),
+            time_of_last_key=self._new_if_exists(
+                time_of_last_key, self.time_of_last_key
+            ),
+            combo_start=self._new_if_exists(combo_start, self.combo_start),
+            recorded_wpms=self._new_if_exists(recorded_wpms, self.recorded_wpms),
+            num_backspaces=self._new_if_exists(num_backspaces, self.num_backspaces),
         )
 
-    def increment_combo(self, key) -> GameState:
+    def increment_combo(self, key: KeyCode) -> GameState:
+        new_combo = self.current_combo + 1
         return self.copy(
-            current_combo=self.current_combo + 1,
+            current_combo=new_combo,
             num_backspaces=self.num_backspaces + 1 if key == Key.backspace else None,
             time_of_last_key=time(),
-            recorded_wpms=[] if self.current_combo == 1 else None,
+            recorded_wpms=[] if self.current_combo == 0 else None,
+            max_combo=new_combo if self.max_combo < new_combo else self.max_combo,
         )
 
     def combo_stopped(self) -> GameState:
@@ -103,9 +122,13 @@ class GameState:
             current_combo=0,
             num_backspaces=0,
             combo_start=time(),
-            max_combo=self.current_combo
-            if self.current_combo > self.max_combo
-            else None,
+            combo_at_last_timeout=self.current_combo
+            if self.current_combo
+            else self.combo_at_last_timeout,
+            median_wpm_at_last_timeout=self.median_wpm
+            if self.median_wpm
+            else self.median_wpm_at_last_timeout,
+            recorded_wpms=[],
         )
 
     def record_wpm(self) -> GameState:
@@ -115,7 +138,12 @@ class GameState:
             recorded_wpms = self.recorded_wpms + [current_wpm]
             if len(recorded_wpms) > 100:
                 recorded_wpms = recorded_wpms[1:]
-        return self.copy(recorded_wpms=recorded_wpms)
+        return self.copy(
+            recorded_wpms=recorded_wpms,
+            max_median_wpm=self.median_wpm
+            if self.median_wpm > self.max_median_wpm
+            else self.max_median_wpm,
+        )
 
 
 class Controller(ABC):
@@ -170,7 +198,7 @@ class ScreenController(SerialOutputController):
             )
         else:
             mode = "e"
-            value_to_display = f"{state.max_combo} {state.median_wpm}"
+            value_to_display = f"{state.max_combo} {state.max_median_wpm}"
         truncated_percent_left = "{:.2f}".format(state.percent_time_left)
         msg = f"{mode},{truncated_percent_left},{value_to_display};"
         if msg != self.last_message:
