@@ -246,24 +246,6 @@ class BellController(SerialOutputController):
             self.serial_connection.write(msg.encode("utf-8"))
 
 
-def _get_controller(
-    identifier: str, controller: Type[SerialOutputController]
-) -> Optional[SerialOutputController]:
-    controllers = list(list_ports.grep(identifier))
-    if len(controllers) > 1:
-        print(
-            f"Multiple controllers with identifier '{identifier}' "
-            f"found. Going with the first "
-            f"{controllers[0].description} {controllers[0].serial_number}"
-        )
-    elif not controllers:
-        print(f"No {identifier} found!")
-        return None
-    print(f"Opening {identifier} controller port")
-    microcontroller = controller(serial.Serial(controllers[0].device, baudrate=9600))
-    return microcontroller
-
-
 class GameManager:
     def __init__(
         self, serial_controllers: List[SerialOutputController], tick_thread: bool = True
@@ -288,6 +270,24 @@ class GameManager:
         snapshot = self.game_state.copy()
         for controller in self.serial_controllers:
             controller.key_down(key, snapshot)
+
+
+def _get_controller(
+    identifier: str, controller: Type[SerialOutputController]
+) -> Optional[SerialOutputController]:
+    controllers = list(list_ports.grep(identifier))
+    if len(controllers) > 1:
+        print(
+            f"Multiple controllers with identifier '{identifier}' "
+            f"found. Going with the first "
+            f"{controllers[0].description} {controllers[0].serial_number}"
+        )
+    elif not controllers:
+        print(f"No {identifier} found!")
+        return None
+    print(f"Opening {identifier} controller port")
+    microcontroller = controller(serial.Serial(controllers[0].device, baudrate=9600))
+    return microcontroller
 
 
 def main():
