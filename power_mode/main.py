@@ -6,13 +6,13 @@ import threading
 from abc import ABC
 from dataclasses import dataclass
 from time import time
-from typing import Optional, Type, List, TypeVar
+from typing import List, Optional, Type, TypeVar
 
-from pynput import keyboard  # type: ignore
-from pynput.keyboard import Key, KeyCode  # type: ignore
-import serial  # type: ignore
+import serial
+from pynput import keyboard
+from pynput.keyboard import Key, KeyCode
 from serial import Serial
-from serial.tools import list_ports  # type: ignore
+from serial.tools import list_ports
 
 T = TypeVar("T")
 

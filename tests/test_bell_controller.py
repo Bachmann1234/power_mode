@@ -34,7 +34,7 @@ def test_bell_controller_can_handle_many_keys():
     mock_serial = Mock()
     controller = BellController(mock_serial)
     gamestate = GameState.start()
-    with freezegun.freeze_time("2020-05-17 10:12:34") as frozen_time:
+    with freezegun.freeze_time("2020-05-17 10:12:34"):
         controller.key_down(KeyCode.from_char("a"), gamestate)
         controller.key_down(KeyCode.from_char("a"), gamestate)
         controller.key_down(KeyCode.from_char("a"), gamestate)

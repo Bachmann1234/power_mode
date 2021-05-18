@@ -2,7 +2,7 @@ from datetime import timedelta
 from time import time
 
 import freezegun
-from pynput.keyboard import KeyCode, Key
+from pynput.keyboard import Key, KeyCode
 
 from power_mode.main import GameState
 

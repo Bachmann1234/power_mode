@@ -11,7 +11,7 @@ def test_key_down():
     mock_controller_one = Mock()
     mock_controller_two = Mock()
     mock_controllers = [mock_controller_one, mock_controller_two]
-    with freezegun.freeze_time("2020-05-17 10:12:34") as frozen_time:
+    with freezegun.freeze_time("2020-05-17 10:12:34"):
         game_manager = GameManager(serial_controllers=mock_controllers)
         game_manager.trigger_key_down(KeyCode.from_char("a"))
         expected_gamestate = GameState(
