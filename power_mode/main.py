@@ -249,9 +249,8 @@ class BellController(SerialOutputController):
 
 class GameManager:
     def __init__(self, serial_controllers: List[SerialOutputController]):
-        self.game_state = GameState.start()
+        self.game_state: GameState = GameState.start()
         self.serial_controllers: List[SerialOutputController] = serial_controllers
-        self.trigger_tick()
 
     def trigger_tick(self) -> None:
         if self.game_state.percent_time_left == 0:
@@ -262,7 +261,12 @@ class GameManager:
             controller.tick(snapshot)
 
     def trigger_key_down(self, key) -> None:
-        self.game_state = self.game_state.increment_combo(key).record_wpm()
+        self.game_state = self.game_state.increment_combo(key)
+        if (
+            self.game_state.current_wpm
+            and self.game_state.current_combo % self.game_state.CHARS_IN_WORD == 0
+        ):
+            self.game_state = self.game_state.record_wpm()
         snapshot = self.game_state.copy()
         for controller in self.serial_controllers:
             controller.key_down(key, snapshot)
