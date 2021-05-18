@@ -161,9 +161,10 @@ class SerialOutputController(Controller, ABC):
 
 
 class ScreenController(SerialOutputController):
+    MODE_CHANGE_TIME = 2
+
     def __init__(self, serial_connection: Serial):
         super().__init__(serial_connection)
-        self.last_write = time()
         self.last_mode_change = time()
         self.display_combo = True
         self.last_message = ""
@@ -173,16 +174,15 @@ class ScreenController(SerialOutputController):
 
     def tick(self, state: GameState) -> None:
         cur_time = time()
-        self.check_for_mode_change(cur_time)
-        if cur_time - self.last_write > 0.1:
-            self.write_state(state, cur_time)
+        self._check_for_mode_change(cur_time)
+        self._write_state(state, cur_time)
 
-    def check_for_mode_change(self, cur_time: float) -> None:
-        if cur_time - self.last_mode_change > 2:
+    def _check_for_mode_change(self, cur_time: float) -> None:
+        if cur_time - self.last_mode_change > self.MODE_CHANGE_TIME:
             self.display_combo = not self.display_combo
             self.last_mode_change = cur_time
 
-    def write_state(self, state: GameState, cur_time: float) -> None:
+    def _write_state(self, state: GameState, cur_time: float) -> None:
         """
         Protocol is mode,timeleft,value;
         mode: (one of: c,w,e)
@@ -200,7 +200,7 @@ class ScreenController(SerialOutputController):
         else:
             mode = "e"
             value_to_display = f"{state.max_combo} {state.max_median_wpm}"
-        truncated_percent_left = "{:.2f}".format(state.percent_time_left)
+        truncated_percent_left = "{:.1f}".format(state.percent_time_left)
         msg = f"{mode},{truncated_percent_left},{value_to_display};"
         if msg != self.last_message:
             self.serial_connection.write(msg.encode("utf-8"))
