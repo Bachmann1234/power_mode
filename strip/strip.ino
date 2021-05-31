@@ -6,7 +6,9 @@
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRBW + NEO_KHZ800);
 
-uint32_t colorArray[] = {
+String END_CODE = String("e");
+
+uint32_t COLOR_ARRAY[] = {
   strip.Color(  0, 255,   0),
   strip.Color(255,   0,   0),
   strip.Color(255, 80,   0),
@@ -17,11 +19,21 @@ uint32_t colorArray[] = {
   strip.Color(  0, 255, 60)
 };
 
-int index = 0;
-char colorParam = '0';
-bool newData = false;
+bool newData;
+
+String colorModeParam;
+String indexParam;
+int parameterIndex;
+
+void reset() {
+  colorModeParam = String("");
+  indexParam = String("");
+  newData = false;
+  parameterIndex = 0;
+}
 
 void setup() {
+  reset();
   strip.begin();
   strip.show();
   strip.setBrightness(BRIGHTNESS);
@@ -33,38 +45,33 @@ void loop() {
   execute();
 }
 
-// leaving in for color testing
-void colorWipe(uint32_t color, int wait) {
-  for (int i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, color);
-    strip.show();
-    delay(wait);
-  }
-}
-
 void getData() {
+  static byte index = 0;
   char recievedChar;
-
   while (Serial.available() > 0 && newData == false) {
-    colorParam = Serial.read();
-    newData = true;
+    recievedChar = Serial.read();
+    if (recievedChar == ';') {
+      newData = true;
+    } else if (recievedChar == ',') {
+      parameterIndex += 1;
+    } else {
+      if (parameterIndex == 1) {
+        colorModeParam += String(recievedChar);
+      } else {
+        indexParam += String(recievedChar);
+      }
+    }
   }
 }
 
 void execute() {
   if (newData) {
-    if (colorParam == 'e') {
-      index = 0;
+    if (colorModeParam == END_CODE) {
       strip.clear();
     } else {
-      strip.setPixelColor(index, colorArray[colorParam - '0']);
-      index++;
+      strip.setPixelColor(indexParam.toInt(), COLOR_ARRAY[colorModeParam.toInt()]);
     }
     strip.show();
-
-    if (index > LED_COUNT) {
-      index = 0;
-    }
-    newData = false;
+    reset();
   }
 }
