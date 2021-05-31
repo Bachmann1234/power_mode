@@ -12,14 +12,9 @@ def test_bell_controller():
     controller = BellController(mock_serial)
     gamestate = GameState.start()
     with freezegun.freeze_time("2020-05-17 10:12:34") as frozen_time:
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        frozen_time.tick(delta=timedelta(seconds=0.04))
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        frozen_time.tick(delta=timedelta(seconds=0.04))
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        frozen_time.tick(delta=timedelta(seconds=0.04))
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        frozen_time.tick(delta=timedelta(seconds=0.04))
+        for _ in range(4):
+            controller.key_down(KeyCode.from_char("a"), gamestate)
+            frozen_time.tick(delta=timedelta(seconds=0.04))
         controller.key_down(KeyCode.from_char("a"), gamestate)
         assert mock_serial.write.call_args_list == [
             call(b"1000"),
@@ -35,16 +30,8 @@ def test_bell_controller_can_handle_many_keys():
     controller = BellController(mock_serial)
     gamestate = GameState.start()
     with freezegun.freeze_time("2020-05-17 10:12:34"):
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
+        for _ in range(10):
+            controller.key_down(KeyCode.from_char("a"), gamestate)
 
         assert mock_serial.write.call_args_list == [
             call(b"1000"),
@@ -59,10 +46,8 @@ def test_bell_timeout():
     controller = BellController(mock_serial)
     gamestate = GameState.start()
     with freezegun.freeze_time("2020-05-17 10:12:34") as frozen_time:
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
-        controller.key_down(KeyCode.from_char("a"), gamestate)
+        for _ in range(4):
+            controller.key_down(KeyCode.from_char("a"), gamestate)
         frozen_time.tick(delta=timedelta(seconds=1))
         controller.tick(gamestate)
 
