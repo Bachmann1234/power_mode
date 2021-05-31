@@ -1,10 +1,10 @@
 from typing import cast
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, call, patch
 
 import pytest
 from pynput.keyboard import KeyCode
 
-from power_mode.main import StripController, GameState
+from power_mode.main import GameState, StripController
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ import statistics
 import threading
 from abc import ABC
 from dataclasses import dataclass
-from time import time, sleep
+from time import sleep, time
 from typing import List, Optional, Type, TypeVar
 
 import serial
