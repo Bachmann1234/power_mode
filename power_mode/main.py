@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import math
+import random
 import statistics
 import threading
 from abc import ABC
 from dataclasses import dataclass
-from time import time
+from time import time, sleep
 from typing import List, Optional, Type, TypeVar
 
 import serial
@@ -247,6 +248,53 @@ class BellController(SerialOutputController):
             self.serial_connection.write(msg.encode("utf-8"))
 
 
+class StripController(SerialOutputController):
+    NUM_COLORS = 8
+    NUM_PIXELS = 144
+
+    def __init__(self, serial_connection: Serial):
+        super().__init__(serial_connection)
+        self.colors = []
+        self.color = 0
+        self.index = 0
+        self.last_message = ""
+        self._reset_colors()
+
+    def tick(self, state: GameState) -> None:
+        if not state.current_combo:
+            self.color = 0
+            self.index = 0
+            self._write_msg("e")
+
+    def key_down(self, key, state: GameState) -> None:
+        self._write_msg(str(self.color))
+        self.index += 1
+        if self.index >= self.NUM_PIXELS:
+            self._change_color()
+
+    def _write_msg(self, mode_param: str):
+        message = f"{self.index},{mode_param};"
+        if message != self.last_message:
+            self.serial_connection.write(message.encode("utf-8"))
+            self.last_message = message
+            # The code driving the pixel strip can screw up serial communication
+            # This sleep gives the strip time to draw before we attempt to write another message
+            sleep(0.01)
+
+    def _change_color(self):
+        if not self.colors:
+            self._reset_colors()
+        self.index = 0
+        self.color = self.colors.pop()
+
+    def _reset_colors(self):
+        self.colors = list(range(0, self.NUM_COLORS))
+        random.shuffle(self.colors)
+        if self.colors[-1] == self.color:
+            first_color = self.colors.pop()
+            self.colors.insert(0, first_color)
+
+
 class GameManager:
     def __init__(self, serial_controllers: List[SerialOutputController]):
         self.game_state: GameState = GameState.start()
@@ -303,6 +351,7 @@ def _main():
             for controller in [
                 _get_controller("Adafruit Metro", ScreenController),
                 _get_controller("Arduino Uno", BellController),
+                _get_controller("IOUSBHostDevice", StripController),
             ]
             if controller
         ],
