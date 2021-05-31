@@ -60,7 +60,6 @@ def test_key_down(strip_controller: StripController):
 
 def test_colors(strip_controller: StripController):
     game_state = GameState.start()
-    mock_serial = cast(Mock, strip_controller.serial_connection)
     colors = []
     for _ in range(100):
         colors.append(strip_controller.color)
