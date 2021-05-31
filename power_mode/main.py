@@ -254,7 +254,7 @@ class StripController(SerialOutputController):
 
     def __init__(self, serial_connection: Serial):
         super().__init__(serial_connection)
-        self.colors = []
+        self.colors: List[int] = []
         self.color = 0
         self.index = 0
         self.last_message = ""

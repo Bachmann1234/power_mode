@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Generator, cast
 from unittest.mock import Mock, call, patch
 
 import pytest
@@ -8,7 +8,7 @@ from power_mode.main import GameState, StripController
 
 
 @pytest.fixture
-def strip_controller() -> StripController:
+def strip_controller() -> Generator[StripController, None, None]:
     with patch(
         "power_mode.main.sleep",
     ):
