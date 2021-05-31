@@ -11,7 +11,7 @@ pyserial = "^3.5"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.4"
-black = "^21.5b1"
+black = "^21.5b2"
 mypy = "^0.812"
 freezegun = "^1.1.0"
 coverage = "^5.5"
