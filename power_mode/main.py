@@ -153,12 +153,21 @@ class Controller(ABC):
         raise NotImplementedError()
 
     def key_down(self, key, state: GameState) -> None:
-        raise NotImplementedError()
+        return None
 
 
 class SerialOutputController(Controller, ABC):
     def __init__(self, serial_connection: Serial):
         self.serial_connection = serial_connection
+        self.last_message = ""
+
+    def write(self, message: str) -> bool:
+        if message != self.last_message:
+            self.serial_connection.write(message.encode("utf-8"))
+            self.last_message = message
+            return True
+        else:
+            return False
 
 
 class ScreenController(SerialOutputController):
@@ -168,10 +177,6 @@ class ScreenController(SerialOutputController):
         super().__init__(serial_connection)
         self.last_mode_change = time()
         self.display_combo = True
-        self.last_message = ""
-
-    def key_down(self, _, state: GameState) -> None:
-        pass
 
     def tick(self, state: GameState) -> None:
         cur_time = time()
@@ -203,9 +208,7 @@ class ScreenController(SerialOutputController):
             value_to_display = f"{state.max_combo}  {state.max_median_wpm}"
         truncated_percent_left = "{:.1f}".format(state.percent_time_left)
         msg = f"{mode},{truncated_percent_left},{value_to_display};"
-        if msg != self.last_message:
-            self.serial_connection.write(msg.encode("utf-8"))
-            self.last_message = msg
+        self.write(msg)
         self.last_write = cur_time
 
 
@@ -213,7 +216,6 @@ class BellController(SerialOutputController):
     def __init__(self, serial_connection: Serial):
         super().__init__(serial_connection)
         self.bell_click_times = [1.0, 1.0, 1.0, 1.0]
-        self.last_message = None
         self.current_index = 0
 
     def key_down(self, key, state: GameState) -> None:
@@ -243,9 +245,7 @@ class BellController(SerialOutputController):
                 for bell_clicked_time in self.bell_click_times
             ]
         )
-        if msg != self.last_message:
-            self.last_message = msg
-            self.serial_connection.write(msg.encode("utf-8"))
+        self.write(msg)
 
 
 class StripController(SerialOutputController):
@@ -274,11 +274,8 @@ class StripController(SerialOutputController):
 
     def _write_msg(self, mode_param: str):
         message = f"{self.index},{mode_param};"
-        if message != self.last_message:
-            self.serial_connection.write(message.encode("utf-8"))
-            self.last_message = message
-            # The code driving the pixel strip can screw up serial communication
-            # This sleep gives the strip time to draw before we attempt to write another message
+        wrote = self.write(message)
+        if wrote:
             sleep(0.01)
 
     def _change_color(self):
@@ -323,18 +320,13 @@ class GameManager:
 def _get_controller(
     identifier: str, controller: Type[SerialOutputController]
 ) -> Optional[SerialOutputController]:
-    controllers = list(list_ports.grep(identifier))
-    if len(controllers) > 1:
-        print(
-            f"Multiple controllers with identifier '{identifier}' "
-            f"found. Going with the first "
-            f"{controllers[0].description} {controllers[0].serial_number}"
-        )
-    elif not controllers:
-        print(f"No {identifier} found!")
-        return None
-    print(f"Opening {identifier} controller port")
-    microcontroller = controller(serial.Serial(controllers[0].device, baudrate=9600))
+    microcontroller = None
+    for port in list_ports.comports():
+        if port.serial_number == identifier:
+            print(f"Opening {identifier} controller port for {controller.__name__}")
+            microcontroller = controller(serial.Serial(port.device, baudrate=9600))
+    if not microcontroller:
+        print(f"No microcontroller with serial {identifier} for {controller.__name__}")
     return microcontroller
 
 
@@ -349,9 +341,10 @@ def _main():
         serial_controllers=[
             controller
             for controller in [
-                _get_controller("Adafruit Metro", ScreenController),
-                _get_controller("Arduino Uno", BellController),
-                _get_controller("IOUSBHostDevice", StripController),
+                _get_controller("8B94297553344B4151202020FF102840", ScreenController),
+                _get_controller("unknown", BellController),
+                _get_controller("753343239353516111D1", StripController),
+                _get_controller("unknown", BalloonFanController),
             ]
             if controller
         ],
