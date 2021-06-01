@@ -292,6 +292,19 @@ class StripController(SerialOutputController):
             self.colors.insert(0, first_color)
 
 
+class BalloonFanController(SerialOutputController):
+    FAN_THRESHOLD = 100
+
+    def __init__(self, serial_connection: Serial):
+        super().__init__(serial_connection)
+        self.last_message = ""
+
+    def tick(self, state: GameState) -> None:
+        balloon = "1" if state.current_combo else "0"
+        fan = "1" if state.current_combo >= self.FAN_THRESHOLD else "0"
+        self.write(f"{balloon},{fan};")
+
+
 class GameManager:
     def __init__(self, serial_controllers: List[SerialOutputController]):
         self.game_state: GameState = GameState.start()
